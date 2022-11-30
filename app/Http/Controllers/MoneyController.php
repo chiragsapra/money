@@ -52,7 +52,7 @@ class MoneyController extends Controller {
                 $year = $data[0];
                 $week = str_replace('W', '', $data[1]);
                 $start = date("Y-m-d", strtotime($year . 'W' . str_pad($week, 2, 0, STR_PAD_LEFT)));
-                $end = date("Y-m-d", strtotime($year . 'W' . str_pad($week, 2, 0, STR_PAD_LEFT) . ' +6 days'));
+                $end = date("Y-m-d", strtotime($year . 'W' . str_pad($week - 1, 2, 0, STR_PAD_LEFT) . ' +4 days'));
                 if ($week > $current) {
                     return response()->json(['message' => 'Please enter the past week.']);
                 } else {
@@ -67,8 +67,8 @@ class MoneyController extends Controller {
                 $year = $data[0];
                 $month = $data[1];
                 $day = cal_days_in_month(CAL_GREGORIAN, $month, $year);
-                $start = $year . "-" . $month . "-01";
-                $end = $year . "-" . $month . "-" . $day;
+                $start = $this->getDay($year . "-" . $month . "-01", 'Add');
+                $end = $this->getDay($year . "-" . ($month - 1) . "-" . $day);
                 $result = $this->currencyData($start, $end, $base);
                 break;
             case 4:
@@ -77,11 +77,11 @@ class MoneyController extends Controller {
                 }
                 $year = date("Y");
                 if ($date == $year) {
-                    $start = $year . "-01-05";
-                    $end = date('Y-m-d', strtotime('-1 day'));
+                    $start = $this->getDay($year . "-01-02", 'Add');
+                    $end = $this->getDay(($year - 1) . "-12-31");
                 } elseif ($date < $year) {
-                    $start = $date . "-01-01";
-                    $end = $date . "-12-31";
+                    $start = $this->getDay($date . "-01-02", 'Add');
+                    $end = $this->getDay(($date - 1) . "-12-31");
                 }
                 if ($date > $year && $date != $year) {
                     return response()->json(['message' => 'Please enter current or the past years.']);
@@ -112,8 +112,8 @@ class MoneyController extends Controller {
             'end_date' => 'required|date_format:Y-m-d',
         ]);
         $base = 'USD';
-        $start = $request['start_date'];
-        $end = $request['end_date'];
+        $start = $this->getDay($request['start_date'], 'Add');
+        $end = $this->getDay($request['end_date']);
         if (in_array($request['base'], $this->currency)) {
             $base = $request['base'];
         }
@@ -135,7 +135,7 @@ class MoneyController extends Controller {
      * @param string $end
      *   End date.
      *
-     * @return \Illuminate\Http\JsonResponse
+     * @return array
      *   Response with result data.
      */
     protected function currencyData($start, $end, $base) {
@@ -155,7 +155,7 @@ class MoneyController extends Controller {
      * @param array $data2
      *   $endDate data.
      *
-     * @return \Illuminate\Http\JsonResponse
+     * @return array
      *   Response with result data.
      */
     protected function calculate($data1, $data2) {
@@ -170,14 +170,46 @@ class MoneyController extends Controller {
     }
 
     /**
+     * Get working day date excluding sat and sun.
+     *
+     * @param string $date
+     *   Date.
+     * @param string $day
+     *   Add or remove days.
+     *
+     * @return string
+     *   Response with result date.
+     */
+    protected function getDay($date, $day = NULL) {
+        $weekday = date('D', strtotime($date));
+        switch($weekday) {
+            case 'Sun':
+                if ($day == 'Add') {
+                    $date = date('Y-m-d', strtotime('+1 day', strtotime($date)));
+                } else {
+                    $date = date('Y-m-d', strtotime('-2 days', strtotime($date)));
+                }
+                break;
+            case 'Sat':
+                if ($day == 'Add') {
+                    $date = date('Y-m-d', strtotime('+2 days', strtotime($date)));
+                } else {
+                    $date = date('Y-m-d', strtotime('-1 day', strtotime($date)));
+                }
+                break;
+        }
+        return $date;
+    }
+
+    /**
      * Get the percent for given two numbers.
      *
-     * @param array $oldFigure
+     * @param float $oldFigure
      *   Start date data.
-     * @param array $newFigure
+     * @param float $newFigure
      *   End date data.
      *
-     * @return \Illuminate\Http\JsonResponse
+     * @return string
      *   Response with result data.
      */
     protected function calculatePercent($oldFigure, $newFigure) {
@@ -192,7 +224,7 @@ class MoneyController extends Controller {
      * @param string $date
      *   Date for which fetching the data.
      *
-     * @return \Illuminate\Http\JsonResponse
+     * @return array
      *   Response with result data.
      */
     protected function currencyapi($date, $base) {
